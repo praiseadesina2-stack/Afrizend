@@ -10,9 +10,11 @@ export default function WalletPage() {
     const user = useAuthStore((s) => s.user);
     const fundWallet = useAuthStore((s) => s.fundWallet);
     const withdrawWallet = useAuthStore((s) => s.withdrawWallet);
+    const issueVirtualWallet = useAuthStore((s) => s.issueVirtualWallet);
     const [filter, setFilter] = useState("ALL");
     const [fundingLoading, setFundingLoading] = useState(false);
     const [withdrawLoading, setWithdrawLoading] = useState(false);
+    const [issuingAccount, setIssuingAccount] = useState(false);
     const isFreelancer = user?.role === "freelancer";
 
     const handleFund = async () => {
@@ -179,18 +181,42 @@ export default function WalletPage() {
 
           <div className="card">
             <h3 className="font-heading" style={{ fontSize: "1rem", color: "white", marginBottom: "0.75rem" }}>Linked Bank Accounts</h3>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", background: "hsl(220 16% 12%)", borderRadius: 8, border: "1px solid hsl(220 20% 16%)" }}>
-              <div style={{ width: 32, height: 32, borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <span style={{ color: "black", fontWeight: 800, fontSize: "0.9rem" }}>K</span>
+            {user?.virtual_account_number ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", padding: "0.75rem", background: "hsl(220 16% 12%)", borderRadius: 8, border: "1px solid hsl(220 20% 16%)" }}>
+                <div style={{ width: 32, height: 32, borderRadius: "50%", background: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <span style={{ color: "black", fontWeight: 800, fontSize: "0.9rem" }}>K</span>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "white" }}>{user.virtual_bank_name || "Kora Bank NGN Account"}</div>
+                  <div style={{ fontSize: "0.7rem", color: "hsl(220 15% 55%)" }}>{user.virtual_account_number}</div>
+                </div>
+                <button className="btn btn-ghost btn-sm" style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>Manage</button>
               </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "white" }}>Kora Bank NGN Account</div>
-                <div style={{ fontSize: "0.7rem", color: "hsl(220 15% 55%)" }}>**** 4892</div>
+            ) : (
+              <div style={{ textAlign: "center", padding: "1rem", background: "hsl(220 16% 12%)", borderRadius: 8, border: "1px dashed hsl(220 20% 25%)" }}>
+                <p style={{ fontSize: "0.8rem", color: "hsl(220 15% 65%)", marginBottom: "0.75rem" }}>No local bank account linked.</p>
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  onClick={async () => {
+                    setIssuingAccount(true);
+                    try {
+                      await issueVirtualWallet();
+                      alert("Virtual Bank Account Successfully Issued!");
+                    } catch (err) {
+                      alert(err.message);
+                    } finally {
+                      setIssuingAccount(false);
+                    }
+                  }} 
+                  disabled={issuingAccount}
+                  style={{ width: "100%", fontSize: "0.8rem" }}
+                >
+                  {issuingAccount ? "Issuing..." : "Issue Local Virtual Bank Account"}
+                </button>
               </div>
-              <button className="btn btn-ghost btn-sm" style={{ padding: "0.2rem 0.5rem", fontSize: "0.7rem" }}>Manage</button>
-            </div>
+            )}
             <button className="btn btn-outline" style={{ width: "100%", marginTop: "0.75rem" }}>
-              + Link New Bank
+              + Link External Bank
             </button>
           </div>
         </div>

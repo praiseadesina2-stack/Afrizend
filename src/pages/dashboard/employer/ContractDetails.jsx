@@ -30,6 +30,8 @@ export default function ContractPage() {
     const unlockDownload = useJobsStore((s) => s.unlockDownload);
     const fundEscrow = useJobsStore((s) => s.fundEscrow);
     const [releasing, setReleasing] = useState(null);
+    const [isFunding, setIsFunding] = useState(false);
+    const [paymentCurrency, setPaymentCurrency] = useState('NGN');
     const [expandedVerdict, setExpandedVerdict] = useState(null);
     const [chatInput, setChatInput] = useState("");
     const [chatMessages, setChatMessages] = useState([
@@ -53,10 +55,10 @@ export default function ContractPage() {
         if (!job)
             return;
         setReleasing(milestoneId);
-        await new Promise((r) => setTimeout(r, 2000)); // Simulate Kora transfer
-        releasePay(job.id, milestoneId);
+        await releasePay(job.id, milestoneId);
         // Check if all milestones approved → unlock download
-        const allDone = job.milestones.filter((m) => m.id !== milestoneId).every((m) => m.status === "APPROVED");
+        const updatedJob = useJobsStore.getState().jobs.find(j => j.id === job.id);
+        const allDone = updatedJob.milestones.filter((m) => m.id !== milestoneId).every((m) => m.status === "APPROVED");
         if (allDone) {
             unlockDownload(job.id, ["final_deliverable.zip", "source_code.zip", "documentation.pdf"]);
         }
@@ -225,17 +227,40 @@ export default function ContractPage() {
             <p style={{ color: "hsl(220 15% 55%)", fontSize: "0.82rem", lineHeight: 1.5, marginBottom: "1rem" }}>
               Pre-authorize and lock project budget into Kora (Kora Protocol) escrow contract. The contractor will see the funds are secured before starting work.
             </p>
+            {job.escrow.status === "PENDING" && (
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ fontSize: "0.8rem", color: "hsl(220 15% 65%)", display: "block", marginBottom: "0.4rem", fontWeight: 600 }}>Payment Currency (DCC)</label>
+                <select 
+                  className="input" 
+                  value={paymentCurrency} 
+                  onChange={(e) => setPaymentCurrency(e.target.value)}
+                  style={{ width: "100%", padding: "0.5rem", background: "hsl(220 20% 12%)", color: "white", border: "1px solid hsl(220 20% 18%)", borderRadius: 6, fontSize: "0.85rem" }}
+                >
+                  <option value="NGN">NGN (Local Settlement)</option>
+                  <option value="USD">USD (Dynamic Currency Conversion)</option>
+                  <option value="EUR">EUR (Dynamic Currency Conversion)</option>
+                  <option value="GBP">GBP (Dynamic Currency Conversion)</option>
+                </select>
+                <p style={{ fontSize: "0.72rem", color: "hsl(217 91% 60%)", marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.3rem" }}>
+                  <Zap size={12} />
+                  Freelancer will receive NGN via local settlement.
+                </p>
+              </div>
+            )}
           </div>
           {job.escrow.status === "PENDING" ? (
             <button 
               id="lock-escrow-btn" 
-              onClick={() => {
-                fundEscrow(job.id);
+              onClick={async () => {
+                setIsFunding(true);
+                await fundEscrow(job.id, job.employerId, job.freelancerId, job.escrow.total, paymentCurrency, 'NGN');
+                setIsFunding(false);
               }} 
+              disabled={isFunding}
               className="btn btn-primary" 
               style={{ width: "100%", gap: "0.5rem" }}
             >
-              <Lock size={16}/> Fund & Lock Escrow
+              {isFunding ? <><Loader2 size={16} style={{ animation: "spin 1s linear infinite" }}/> Redirecting to Kora...</> : <><Lock size={16}/> Fund & Lock Escrow</>}
             </button>
           ) : (
             <div style={{ background: "hsl(145 65% 42% / 0.08)", border: "1px solid hsl(145 65% 42% / 0.2)", borderRadius: 8, padding: "0.75rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>

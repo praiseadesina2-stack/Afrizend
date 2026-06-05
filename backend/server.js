@@ -147,6 +147,33 @@ app.post('/api/wallet/withdraw', authenticateToken, (req, res) => {
   });
 });
 
+app.post('/api/wallet/virtual', authenticateToken, (req, res) => {
+  db.get(`SELECT * FROM users WHERE id = ?`, [req.user.id], async (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    try {
+      // Issue virtual account via Kora
+      const koraRes = await koraService.createVirtualAccount(user);
+      if (!koraRes.success) {
+        return res.status(400).json({ error: koraRes.error || "Failed to create virtual account" });
+      }
+
+      const { account_number, bank_name, account_reference } = koraRes.account;
+
+      // Save to DB
+      db.run(`UPDATE users SET virtual_account_number = ?, virtual_bank_name = ?, virtual_account_reference = ? WHERE id = ?`, 
+        [account_number, bank_name, account_reference, user.id], 
+        function(err) {
+          if (err) return res.status(500).json({ error: err.message });
+          trackActivity(user.id, 'VIRTUAL_WALLET_ISSUED', { account_number });
+          res.json({ success: true, account: koraRes.account });
+      });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+});
+
 // ==========================================
 // 1. JOBS & AI MATCHING
 // ==========================================
@@ -260,24 +287,45 @@ app.post('/api/chat', (req, res) => {
 // ==========================================
 // 3. ESCROW (KORA API)
 // ==========================================
-app.post('/api/escrow/lock', async (req, res) => {
-  const { job_id, employer_id, freelancer_id, agreed_amount } = req.body;
+app.post('/api/escrow/lock', (req, res) => {
+  const { job_id, employer_id, freelancer_id, agreed_amount, payment_currency, settlement_currency } = req.body;
   const contractId = uuidv4();
   
-  try {
-    const escrowResult = await koraService.lockFunds(employer_id, agreed_amount);
-    
-    db.run(`INSERT INTO contracts (id, job_id, employer_id, freelancer_id, escrow_status, agreed_amount) 
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      [contractId, job_id, employer_id, freelancer_id, 'locked', agreed_amount],
-      (err) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(200).json({ success: true, contractId, escrowResult });
-      }
-    );
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
+  // 1. Check employer balance
+  db.get(`SELECT balance FROM users WHERE id = ?`, [employer_id], async (err, user) => {
+    if (err) return res.status(500).json({ error: err.message });
+    if (!user) return res.status(404).json({ error: "Employer not found" });
+    if (user.balance < agreed_amount) {
+      return res.status(400).json({ error: "Insufficient virtual balance. Please deposit funds first." });
+    }
+
+    try {
+      // 2. Deduct from balance
+      await new Promise((resolve, reject) => {
+        db.run(`UPDATE users SET balance = balance - ? WHERE id = ?`, [agreed_amount, employer_id], (updateErr) => {
+          if (updateErr) reject(updateErr);
+          else resolve();
+        });
+      });
+      
+      trackActivity(employer_id, 'FUNDS_LOCKED_IN_ESCROW', { amount: agreed_amount, job_id });
+
+      // 3. Lock via Kora
+      const escrowResult = await koraService.lockFunds(employer_id, agreed_amount, payment_currency || 'NGN', settlement_currency || 'NGN');
+      
+      // 4. Save contract
+      db.run(`INSERT INTO contracts (id, job_id, employer_id, freelancer_id, escrow_status, agreed_amount) 
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        [contractId, job_id, employer_id, freelancer_id, 'locked', agreed_amount],
+        (insertErr) => {
+          if (insertErr) return res.status(500).json({ error: insertErr.message });
+          res.status(200).json({ success: true, contractId, escrowResult });
+        }
+      );
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 });
 
 // ==========================================

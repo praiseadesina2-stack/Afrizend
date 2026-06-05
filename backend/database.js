@@ -22,6 +22,10 @@ const db = new sqlite3.Database(dbPath, (err) => {
         bio TEXT,
         skills TEXT,
         hourly_rate REAL,
+        currency TEXT DEFAULT 'NGN',
+        virtual_account_number TEXT,
+        virtual_bank_name TEXT,
+        virtual_account_reference TEXT,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
       )`);
 

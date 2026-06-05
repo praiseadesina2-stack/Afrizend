@@ -91,6 +91,29 @@ export const useAuthStore = create((set) => ({
         }
         const data = await res.json();
         set((state) => ({ user: { ...state.user, balance: data.balance } }));
+    },
+
+    issueVirtualWallet: async () => {
+        const token = localStorage.getItem('afrizend_token');
+        if (!token) return;
+        const res = await fetch(`${API_URL}/wallet/virtual`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(()=>({}));
+            throw new Error(data.error || 'Virtual wallet issuance failed');
+        }
+        const data = await res.json();
+        set((state) => ({ 
+            user: { 
+                ...state.user, 
+                virtual_account_number: data.account.account_number,
+                virtual_bank_name: data.account.bank_name,
+                virtual_account_reference: data.account.account_reference
+            } 
+        }));
+        return data.account;
     }
 }));
 

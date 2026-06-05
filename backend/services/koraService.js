@@ -1,15 +1,78 @@
 const MOCK_DELAY = 1500; // Simulate network latency
 
 /**
- * Lock funds in Kora Virtual Escrow
+ * Create an NGN Virtual Bank Account for a User
+ */
+async function createVirtualAccount(user) {
+  console.log(`[Kora Virtual Account] Issuing Virtual Wallet for User ${user.id}...`);
+
+  if (process.env.KORA_SECRET_KEY && process.env.KORA_SECRET_KEY !== 'dummy' && process.env.KORA_SECRET_KEY !== 'sk_testing_placeholder') {
+    try {
+      const payload = {
+        account_name: user.name,
+        account_reference: `vba_${user.id}_${Date.now()}`,
+        permanent: true,
+        bank_code: "000", // Sandbox test bank code
+        customer: {
+          name: user.name,
+          email: user.email || "test@example.com"
+        },
+        kyc: {
+          bvn: "12345678901" // Mock BVN for sandbox
+        }
+      };
+
+      const response = await fetch('https://api.korapay.com/merchant/api/v1/virtual-bank-account', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.KORA_SECRET_KEY}`
+        },
+        body: JSON.stringify(payload)
+      });
+      const data = await response.json();
+      
+      if (response.ok && data.status) {
+        return {
+          success: true,
+          account: {
+            account_number: data.data.account_number,
+            bank_name: data.data.bank_name,
+            account_reference: data.data.account_reference
+          }
+        };
+      } else {
+        console.warn(`[Kora Virtual Account] API Error:`, data);
+      }
+    } catch (err) {
+      console.error("[Kora Virtual Account] Exception:", err.message);
+    }
+  }
+
+  // Fallback Mock
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve({
+        success: true,
+        account: {
+          account_number: `765${Math.floor(1000000 + Math.random() * 9000000)}`,
+          bank_name: "Wema Bank (Sandbox)",
+          account_reference: `vba_${user.id}_${Date.now()}`
+        }
+      });
+    }, MOCK_DELAY);
+  });
+}
+
+/**
+ * Lock funds in Kora Virtual Escrow with Dynamic Currency Conversion support
  * Hits: POST https://api.korapay.com/merchant/api/v1/charges/initialize
  */
-async function lockFunds(employerId, amount) {
-  console.log(`[Kora Escrow] Locking ${amount} USD in Escrow for Employer ${employerId} via Kora API...`);
+async function lockFunds(employerId, amount, paymentCurrency = 'NGN', settlementCurrency = 'NGN') {
+  console.log(`[Kora Escrow] Locking ${amount} ${paymentCurrency} -> ${settlementCurrency} in Escrow for Employer ${employerId} via Kora API...`);
   
-  if (process.env.KORA_SECRET_KEY && process.env.KORA_SECRET_KEY !== 'dummy') {
+  if (process.env.KORA_SECRET_KEY && process.env.KORA_SECRET_KEY !== 'dummy' && process.env.KORA_SECRET_KEY !== 'sk_testing_placeholder') {
     try {
-      console.log(`[Kora Escrow] Hitting live/test Kora API charges endpoint...`);
       const response = await fetch('https://api.korapay.com/merchant/api/v1/charges/initialize', {
         method: 'POST',
         headers: {
@@ -18,7 +81,9 @@ async function lockFunds(employerId, amount) {
         },
         body: JSON.stringify({
           amount: Number(amount),
-          currency: 'USD',
+          currency: settlementCurrency,
+          payment_currency: paymentCurrency,
+          settlement_currency: settlementCurrency,
           reference: `escrow-lock-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           customer: {
             email: 'employer@afrizend.com',
@@ -35,7 +100,7 @@ async function lockFunds(employerId, amount) {
           status: 'escrowed',
           transactionId: data.data.reference || `kora-escrow-${Date.now()}`,
           amount_locked: amount,
-          currency: 'USD',
+          currency: settlementCurrency,
           checkoutUrl: data.data.checkout_url,
           message: 'Funds successfully locked in Kora Virtual Escrow via Kora Checkout Link.'
         };
@@ -54,8 +119,8 @@ async function lockFunds(employerId, amount) {
         status: 'escrowed',
         transactionId: `kora-escrow-${Date.now()}`,
         amount_locked: amount,
-        currency: 'USD',
-        message: 'Funds successfully locked in Kora Virtual Escrow.'
+        currency: settlementCurrency,
+        message: `Funds successfully locked in Kora Virtual Escrow. Settles in ${settlementCurrency}`
       });
     }, MOCK_DELAY);
   });
@@ -66,9 +131,9 @@ async function lockFunds(employerId, amount) {
  * Hits: POST https://api.korapay.com/merchant/api/v1/transactions/disburse
  */
 async function executePayout(freelancerId, amount) {
-  console.log(`[Kora Payout] Releasing ${amount} USD from Escrow to Freelancer ${freelancerId}...`);
+  console.log(`[Kora Payout] Releasing ${amount} from Escrow to Freelancer ${freelancerId}...`);
 
-  if (process.env.KORA_SECRET_KEY && process.env.KORA_SECRET_KEY !== 'dummy') {
+  if (process.env.KORA_SECRET_KEY && process.env.KORA_SECRET_KEY !== 'dummy' && process.env.KORA_SECRET_KEY !== 'sk_testing_placeholder') {
     try {
       console.log(`[Kora Payout] Hitting live/test Kora API payouts disburse endpoint...`);
       const response = await fetch('https://api.korapay.com/merchant/api/v1/transactions/disburse', {
@@ -80,12 +145,12 @@ async function executePayout(freelancerId, amount) {
         body: JSON.stringify({
           reference: `payout-disburse-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
           amount: Number(amount),
-          currency: 'USD',
+          currency: 'NGN',
           destination: {
             type: 'bank_account',
             bank: {
-              bank_code: '044',
-              account_number: '0123456789'
+              bank_code: '033',
+              account_number: '0000000000'
             }
           },
           customer: {
@@ -128,6 +193,7 @@ async function executePayout(freelancerId, amount) {
 }
 
 module.exports = {
+  createVirtualAccount,
   lockFunds,
   executePayout
 };

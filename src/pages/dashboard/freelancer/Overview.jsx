@@ -16,17 +16,52 @@ export default function FreelancerDashboard() {
     ];
     return (<div style={{ padding: "1.5rem", maxWidth: 1100, margin: "0 auto" }}>
       {/* Header */}
-      <div style={{ marginBottom: "1.75rem" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-          <div className="status-dot online"/>
-          <span style={{ fontSize: "0.78rem", color: "hsl(145 65% 45%)", fontWeight: 600 }}>Kora Network Connected</span>
+      <div style={{ marginBottom: "1.75rem", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+            <div className="status-dot online"/>
+            <span style={{ fontSize: "0.78rem", color: "hsl(145 65% 45%)", fontWeight: 600 }}>Kora Network Connected</span>
+          </div>
+          <h1 className="font-heading" style={{ fontSize: "1.75rem", fontWeight: 800, color: "white", letterSpacing: "-0.03em" }}>
+            Good afternoon, {user?.name?.split(" ")[0]} 👋
+          </h1>
+          <p style={{ color: "hsl(220 15% 55%)", fontSize: "0.875rem", marginTop: 4 }}>
+            Platform Wallet: <code style={{ color: "hsl(200 100% 65%)", fontSize: "0.8rem" }}>{user?.walletAddress}</code>
+          </p>
         </div>
-        <h1 className="font-heading" style={{ fontSize: "1.75rem", fontWeight: 800, color: "white", letterSpacing: "-0.03em" }}>
-          Good afternoon, {user?.name?.split(" ")[0]} 👋
-        </h1>
-        <p style={{ color: "hsl(220 15% 55%)", fontSize: "0.875rem", marginTop: 4 }}>
-          Your wallet: <code style={{ color: "hsl(200 100% 65%)", fontSize: "0.8rem" }}>{user?.walletAddress}</code>
-        </p>
+        
+        {/* Virtual Bank Account Widget */}
+        <div className="card" style={{ padding: "1rem", minWidth: 280, background: "hsl(145 65% 42% / 0.05)", border: "1px solid hsl(145 65% 42% / 0.25)" }}>
+          <div style={{ fontSize: "0.8rem", color: "hsl(220 15% 65%)", marginBottom: "0.5rem" }}>Local Virtual Account (NGN)</div>
+          {user?.virtual_account_number ? (
+            <div>
+              <div className="font-heading" style={{ fontSize: "1.3rem", fontWeight: 700, color: "white" }}>{user.virtual_account_number}</div>
+              <div style={{ fontSize: "0.75rem", color: "hsl(145 65% 50%)" }}>{user.virtual_bank_name}</div>
+              <div style={{ fontSize: "0.7rem", color: "hsl(220 15% 50%)", marginTop: "0.25rem" }}>Ref: {user.virtual_account_reference}</div>
+            </div>
+          ) : (
+            <button 
+              className="btn btn-primary btn-sm" 
+              onClick={async (e) => {
+                const btn = e.currentTarget;
+                const orig = btn.innerText;
+                btn.innerText = "Issuing...";
+                btn.disabled = true;
+                try {
+                  await useAuthStore.getState().issueVirtualWallet();
+                } catch(err) {
+                  alert("Failed: " + err.message);
+                } finally {
+                  btn.innerText = orig;
+                  btn.disabled = false;
+                }
+              }}
+              style={{ width: "100%" }}
+            >
+              Issue Virtual Account
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats grid */}
@@ -37,7 +72,7 @@ export default function FreelancerDashboard() {
               <div style={{
                 width: 32, height: 32, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center",
                 background: color === "green" ? "hsl(145 65% 42% / 0.15)" : color === "cyan" ? "hsl(200 100% 60% / 0.12)" : "hsl(217 91% 55% / 0.15)",
-            }}>
+              }}>
                 <Icon size={16} color={color === "green" ? "hsl(145 65% 50%)" : color === "cyan" ? "hsl(200 100% 65%)" : "hsl(217 91% 70%)"}/>
               </div>
             </div>
